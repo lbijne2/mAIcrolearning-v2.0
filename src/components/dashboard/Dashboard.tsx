@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
 import { 
   Brain, 
@@ -11,13 +12,18 @@ import {
   Plus,
   LogOut,
   Settings,
-  Bell
+  Bell,
+  Edit3,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Progress, CircularProgress } from '@/components/ui/Progress'
 import { useAuth } from '@/hooks/useAuth'
-import type { UserProfile } from '@/types'
+import { supabase } from '@/lib/supabase'
+import type { UserProfile, Course } from '@/types'
+import type { CourseRow } from '@/types/models'
 
 interface DashboardProps {
   user: User
@@ -26,10 +32,78 @@ interface DashboardProps {
 
 export function Dashboard({ user, profile }: DashboardProps) {
   const [showCourseModal, setShowCourseModal] = useState(false)
-  const { signOut } = useAuth()
+  const [courses, setCourses] = useState<Course[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const { signOut, refreshAuth } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    loadCourses()
+  }, [])
+
+  const loadCourses = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const { data: coursesData, error } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['draft', 'active'])
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading courses:', error)
+        setError('Failed to load courses. Please try again.')
+      } else {
+        setCourses(coursesData || [])
+      }
+    } catch (err) {
+      console.error('Error loading courses:', err)
+      setError('An unexpected error occurred while loading courses.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refreshAuth()
+      await loadCourses()
+    } catch (err) {
+      console.error('Error refreshing dashboard:', err)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const handleNavigation = (path: string) => {
+    // Add a small delay to ensure state is stable before navigation
+    setTimeout(() => {
+      router.push(path)
+    }, 100)
+  }
+
+  const draftCourses = courses.filter(course => course.status === 'draft')
+  const activeCourses = courses.filter(course => course.status === 'active')
+  const latestDraft = draftCourses[0]
 
   const handleSignOut = async () => {
-    await signOut()
+    try {
+      const result = await signOut()
+      if (result?.success) {
+        // Redirect to home page after successful sign out
+        router.push('/')
+      }
+    } catch (error) {
+      console.error('Sign out error:', error)
+      // Even if there's an error, try to redirect to home
+      router.push('/')
+    }
   }
 
   return (
@@ -46,6 +120,15 @@ export function Dashboard({ user, profile }: DashboardProps) {
             </div>
             
             <div className="flex items-center space-x-4">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleRefresh}
+                loading={isRefreshing}
+                icon={<RefreshCw />}
+              >
+                Refresh
+              </Button>
               <Button variant="ghost" size="sm" icon={<Bell />}>
                 Notifications
               </Button>
@@ -61,6 +144,30 @@ export function Dashboard({ user, profile }: DashboardProps) {
       </header>
 
       <div className="max-w-7xl mx-auto container-padding py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6">
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <AlertCircle className="h-5 w-5 text-red-600" />
+                    <p className="text-red-800">{error}</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={loadCourses}
+                    icon={<RefreshCw />}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
@@ -79,8 +186,8 @@ export function Dashboard({ user, profile }: DashboardProps) {
                 <BookOpen className="h-6 w-6 text-primary-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-neutral-900">0</p>
-                <p className="text-sm text-neutral-600">Courses Started</p>
+                <p className="text-2xl font-bold text-neutral-900">{activeCourses.length}</p>
+                <p className="text-sm text-neutral-600">Active Courses</p>
               </div>
             </CardContent>
           </Card>
@@ -125,28 +232,92 @@ export function Dashboard({ user, profile }: DashboardProps) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Draft Course Banner */}
+            {latestDraft && (
+              <Card className="border-yellow-200 bg-yellow-50">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <AlertCircle className="h-5 w-5 text-yellow-600" />
+                      <div>
+                        <h3 className="font-semibold text-yellow-800 mb-1">
+                          Resume Draft Course
+                        </h3>
+                        <p className="text-yellow-700 text-sm">
+                          You have a draft course: "{latestDraft.title}"
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleNavigation(`/course/${latestDraft.id}/draft`)}
+                      icon={<Edit3 />}
+                    >
+                      Continue Editing
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Current Course */}
             <Card>
               <CardHeader>
-                <CardTitle>Your Learning Path</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Your Learning Path</CardTitle>
+                  {activeCourses.length > 0 && (
+                    <Button 
+                      size="sm"
+                      onClick={() => handleNavigation('/generate')}
+                      icon={<Plus />}
+                    >
+                      Generate New Course
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12">
-                  <Brain className="h-16 w-16 text-neutral-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-neutral-900 mb-2">
-                    Ready to Start Learning?
-                  </h3>
-                  <p className="text-neutral-600 mb-6 max-w-md mx-auto">
-                    Let's create your first personalized AI course based on your profile. 
-                    It will be tailored specifically for the {profile.industry} industry.
-                  </p>
-                  <Button 
-                    onClick={() => setShowCourseModal(true)}
-                    icon={<Plus />}
-                  >
-                    Generate My First Course
-                  </Button>
-                </div>
+                {loading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                    <p className="text-neutral-600">Loading courses...</p>
+                  </div>
+                ) : activeCourses.length > 0 ? (
+                  <div className="space-y-4">
+                    {activeCourses.map((course) => (
+                      <div key={course.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h3 className="font-semibold text-neutral-900">{course.title}</h3>
+                          <p className="text-sm text-neutral-600">{course.description}</p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleNavigation(`/course/${course.id}`)}
+                        >
+                          View Course
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Brain className="h-16 w-16 text-neutral-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-neutral-900 mb-2">
+                      Ready to Start Learning?
+                    </h3>
+                    <p className="text-neutral-600 mb-6 max-w-md mx-auto">
+                      Let's create your first personalized AI course based on your profile. 
+                      It will be tailored specifically for the {profile.industry} industry.
+                    </p>
+                    <Button 
+                      onClick={() => handleNavigation('/generate')}
+                      icon={<Plus />}
+                    >
+                      Generate My First Course
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -235,7 +406,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
         </div>
       </div>
 
-      {/* Course Generation Modal - Placeholder */}
+      {/* Course Generation Modal - Redirect to Generate Page */}
       {showCourseModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md">
@@ -245,12 +416,23 @@ export function Dashboard({ user, profile }: DashboardProps) {
             <CardContent className="text-center py-8">
               <Brain className="h-12 w-12 text-primary-600 mx-auto mb-4" />
               <p className="text-neutral-600 mb-6">
-                Course generation feature coming soon! We'll create a personalized 
-                4-week AI course for the {profile.industry} industry.
+                Let's create a personalized 4-week AI course for the {profile.industry} industry.
               </p>
-              <Button onClick={() => setShowCourseModal(false)}>
-                Close
-              </Button>
+              <div className="space-y-3">
+                <Button 
+                  onClick={() => handleNavigation('/generate')}
+                  className="w-full"
+                >
+                  Go to Course Generator
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowCourseModal(false)}
+                  className="w-full"
+                >
+                  Cancel
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -8,6 +8,65 @@ const grok = new OpenAI({
 
 export { grok }
 
+// Helper function to parse JSON responses that might be wrapped in markdown code blocks
+function parseJSONResponse(content: string): any {
+  console.log('Raw response content:', content)
+  console.log('Content length:', content.length)
+  console.log('Content type:', typeof content)
+  
+  // Check if response might be truncated
+  if (content.length > 7000) {
+    console.log('Response is quite long, checking for completeness...')
+  }
+  
+  try {
+    // First, try to parse as raw JSON
+    console.log('Attempting to parse as raw JSON...')
+    return JSON.parse(content)
+  } catch (error) {
+    console.log('Raw JSON parsing failed:', error)
+    
+    // Check if the error suggests truncation
+    const errorMessage = (error as Error).message
+    if (errorMessage.includes('Unexpected end of JSON input') || 
+        errorMessage.includes('Expected') && errorMessage.includes('after array element')) {
+      console.error('JSON appears to be truncated. Response length:', content.length)
+      throw new Error('Response was truncated. Please try again with a shorter course topic or contact support.')
+    }
+    
+    // If that fails, try to extract JSON from markdown code blocks
+    console.log('Looking for markdown code blocks...')
+    const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
+    if (jsonMatch) {
+      console.log('Found markdown block, extracted JSON:', jsonMatch[1])
+      try {
+        return JSON.parse(jsonMatch[1])
+      } catch (innerError) {
+        console.error('Failed to parse JSON from markdown block:', innerError)
+        console.error('Extracted content was:', jsonMatch[1])
+        throw new Error('Invalid JSON format in response')
+      }
+    }
+    
+    // If no markdown blocks found, try to find JSON object in the content
+    console.log('Looking for JSON object in content...')
+    const jsonObjectMatch = content.match(/\{[\s\S]*\}/)
+    if (jsonObjectMatch) {
+      console.log('Found JSON object:', jsonObjectMatch[0])
+      try {
+        return JSON.parse(jsonObjectMatch[0])
+      } catch (innerError) {
+        console.error('Failed to parse JSON object from content:', innerError)
+        console.error('Extracted content was:', jsonObjectMatch[0])
+        throw new Error('Invalid JSON format in response')
+      }
+    }
+    
+    console.error('No valid JSON found in response. Full content:', content)
+    throw new Error('No valid JSON found in response')
+  }
+}
+
 // Course generation prompt templates
 export const COURSE_GENERATION_PROMPTS = {
   courseStructure: `You are an expert AI education curriculum designer. Create a comprehensive 4-week course structure for the topic: "{topic}" in the industry: "{industry}".
@@ -19,6 +78,8 @@ Requirements:
 - Include industry-specific examples and tools
 - Target audience: {aiSkillLevel} in AI, {experienceLevel} professional
 - Learning goals: {learningGoals}
+
+IMPORTANT: Return ONLY valid JSON. Do not include any markdown formatting, code blocks, or explanatory text. The response must be a single JSON object.
 
 Return a JSON structure with:
 - Course title, description, learning objectives
@@ -32,7 +93,42 @@ Session types to include:
 - quiz: Knowledge verification
 - interactive: Hands-on demos
 - hands_on: Practical exercises
-- review: Consolidation and reflection`,
+- review: Consolidation and reflection
+
+Example JSON structure:
+{
+  "title": "Course Title",
+  "description": "Course description",
+  "learningObjectives": ["objective1", "objective2"],
+  "tags": ["tag1", "tag2"],
+  "weeks": [
+    {
+      "weekNumber": 1,
+      "theme": "Week 1 Theme",
+      "sessions": [
+        {
+          "weekNumber": 1,
+          "dayNumber": 1,
+          "title": "Session Title",
+          "description": "Session description",
+          "sessionType": "theory",
+          "estimatedDuration": 10,
+          "learningObjectives": ["objective1"],
+          "content": {
+            "mainContent": "Detailed session content here",
+            "examples": ["example1", "example2"],
+            "keyPoints": ["point1", "point2"],
+            "resources": ["resource1", "resource2"]
+          }
+        }
+      ]
+    }
+  ],
+  "tools": ["tool1", "tool2"],
+  "assessmentCheckpoints": ["checkpoint1", "checkpoint2"]
+}
+
+IMPORTANT: Every session MUST include a "content" field with detailed session content. The content field should contain the actual learning material for that session.`,
 
   sessionContent: `Generate detailed content for a {sessionType} session titled "{sessionTitle}" for week {week}, day {day} of the AI course.
 
@@ -84,11 +180,11 @@ export class CourseGenerationChain {
       .replace('{learningGoals}', params.learningGoals.join(', '))
 
     const response = await grok.chat.completions.create({
-      model: 'grok-beta',
+      model: 'grok-2-vision-1212',
       messages: [
         {
           role: 'system',
-          content: 'You are an expert AI education curriculum designer. Always respond with valid JSON.'
+          content: 'You are an expert AI education curriculum designer. You must respond with ONLY valid JSON. Do not include any markdown formatting, code blocks, or explanatory text. The response must be a single JSON object that can be parsed directly.'
         },
         {
           role: 'user',
@@ -96,10 +192,11 @@ export class CourseGenerationChain {
         }
       ],
       temperature: 0.7,
-      max_tokens: 2000
+      max_tokens: 8000
     })
 
-    return JSON.parse(response.choices[0].message.content || '{}')
+    const content = response.choices[0].message.content || '{}'
+    return parseJSONResponse(content)
   }
 
   async generateSessionContent(params: {
@@ -121,7 +218,7 @@ export class CourseGenerationChain {
       .replace('{learningObjectives}', params.learningObjectives.join(', '))
 
     const response = await grok.chat.completions.create({
-      model: 'grok-beta',
+      model: 'grok-2-vision-1212',
       messages: [
         {
           role: 'system',
@@ -133,10 +230,11 @@ export class CourseGenerationChain {
         }
       ],
       temperature: 0.8,
-      max_tokens: 1500
+      max_tokens: 4000
     })
 
-    return JSON.parse(response.choices[0].message.content || '{}')
+    const content = response.choices[0].message.content || '{}'
+    return parseJSONResponse(content)
   }
 
   async adaptContent(params: {
@@ -152,7 +250,7 @@ export class CourseGenerationChain {
       .replace('{adaptationType}', params.adaptationType)
 
     const response = await grok.chat.completions.create({
-      model: 'grok-beta',
+      model: 'grok-2-vision-1212',
       messages: [
         {
           role: 'system',
@@ -164,10 +262,11 @@ export class CourseGenerationChain {
         }
       ],
       temperature: 0.6,
-      max_tokens: 1000
+      max_tokens: 3000
     })
 
-    return JSON.parse(response.choices[0].message.content || '{}')
+    const content = response.choices[0].message.content || '{}'
+    return parseJSONResponse(content)
   }
 }
 
@@ -200,7 +299,7 @@ Guidelines:
     ]
 
     const response = await grok.chat.completions.create({
-      model: 'grok-beta',
+      model: 'grok-2-vision-1212',
       messages: messages as any,
       temperature: 0.7,
       max_tokens: 300
@@ -223,7 +322,7 @@ Context: ${params.context}
 Give encouraging, specific feedback that helps the user learn.`
 
     const response = await grok.chat.completions.create({
-      model: 'grok-beta',
+      model: 'grok-2-vision-1212',
       messages: [
         {
           role: 'system',

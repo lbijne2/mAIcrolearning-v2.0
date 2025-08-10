@@ -48,7 +48,7 @@ export function Input({
             error 
               ? 'border-red-300 focus:ring-red-500' 
               : 'border-neutral-300',
-            icon && 'pl-10',
+            icon ? 'pl-10' : '',
             className
           )}
           {...props}

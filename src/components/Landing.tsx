@@ -389,7 +389,9 @@ export function Landing() {
           onClose={() => setShowAuthModal(false)}
           onSuccess={() => {
             setShowAuthModal(false)
-            router.push('/onboarding')
+            // Let the auth state change handle the redirect
+            // The dashboard page will handle redirecting to onboarding if needed
+            router.push('/dashboard')
           }}
         />
       )}

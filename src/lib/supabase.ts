@@ -52,3 +52,17 @@ export const supabaseAdmin = (typeof window === 'undefined' &&
                                process.env.SUPABASE_SERVICE_ROLE_KEY)
   ? createSupabaseAdmin()
   : null
+
+// Server-side client for auth operations (uses anon key but can access user sessions)
+export function createSupabaseServer() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase environment variables')
+  }
+  
+  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
+}

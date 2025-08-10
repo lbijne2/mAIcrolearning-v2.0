@@ -14,7 +14,7 @@ mAIcrolearning combines computer science fundamentals with industry-specific AI 
    - Next.js 15 with TypeScript
    - Tailwind CSS for responsive design
    - Supabase for backend and authentication
-   - OpenAI GPT-4 for course generation
+   - xAI Grok and OpenAI GPT-4 for course generation
    - Lucide icons for consistent UI
 
 2. **Interactive Onboarding**
@@ -35,41 +35,61 @@ mAIcrolearning combines computer science fundamentals with industry-specific AI 
    - Mobile-first responsive design
    - Beautiful landing page with feature showcase
 
-5. **Dashboard Foundation**
-   - Personalized welcome experience
-   - Profile summary and learning goals display
-   - Progress tracking placeholder
-   - Course generation entry point
+5. **Course Generation System (v0.3.0)**
+   - **Generate Page** (`/generate`): Complete course creation form
+     - Topic input with validation
+     - Industry selection (default: Healthcare & Life Sciences)
+     - AI skill level and experience level selection
+     - Learning goals as comma-separated chips
+     - Theory-first approach focus
+     - LLM provider selection (xAI Grok preferred, OpenAI GPT-4 fallback)
+   - **Draft Course Preview** (`/course/[id]/draft`): Editable course management
+     - Course metadata display and editing
+     - Session table with inline editing capabilities
+     - Session type selection (theory, quiz, interactive, hands_on, review)
+     - Duration editing and JSON content management
+     - Publish and discard actions
+   - **Server Actions**: Course generation and management
+     - `generateCoursePlan()`: Creates draft courses with 28 sessions
+     - `publishCourse()`: Activates draft courses
+     - `discardCourse()`: Soft deletes courses
+   - **LLM Integration**: Multi-provider AI support
+     - xAI Grok (preferred when `XAI_API_KEY` available)
+     - OpenAI GPT-4 (fallback when `OPENAI_API_KEY` available)
+     - Automatic retry with stricter prompts for malformed JSON
+   - **Type Safety**: Comprehensive validation
+     - Zod schemas for form validation
+     - TypeScript interfaces for all data structures
+     - Error handling with typed responses
+
+6. **Enhanced Dashboard**
+   - Draft course banner with "Resume draft course" functionality
+   - Active courses display and management
+   - Course generation CTA when no courses exist
+   - Real-time course counts and status tracking
 
 ### 🚧 In Development
 
-1. **Database Schema**
-   - User profiles and progress tracking
-   - Course and session management
-   - Analytics and emotion data
-   - Learning path adaptations
-
-2. **Course Generation System**
-   - LLM chains for content creation
-   - Industry-specific customization
-   - 4-week course structure with daily sessions
-   - Theory, quiz, interactive, and hands-on content types
-
-3. **Micro-Learning Engine**
+1. **Micro-Learning Engine**
    - Session delivery and tracking
    - Adaptive learning paths
    - Performance analytics
    - Engagement monitoring
 
-4. **Emotion-Aware Teaching**
+2. **Emotion-Aware Teaching**
    - Hume AI integration for emotion detection
    - Content adaptation based on frustration/engagement
    - Real-time learning adjustments
 
-5. **AI Chatbot**
+3. **AI Chatbot**
    - Voice and text lesson delivery
    - Interactive tool calls
    - Contextual help and guidance
+
+4. **Lesson Player**
+   - Interactive session playback
+   - Progress tracking
+   - Quiz and assessment integration
 
 ## 🏗️ Architecture
 
@@ -131,8 +151,9 @@ src/
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-   # OpenAI Configuration
+   # AI Provider Configuration (choose one or both)
    OPENAI_API_KEY=your_openai_api_key
+   XAI_API_KEY=your_xai_api_key
 
    # Hume AI Configuration (for emotion detection)
    HUME_API_KEY=your_hume_api_key
@@ -189,19 +210,34 @@ The platform uses the following main tables:
 
 ## 🧠 AI Integration
 
-### Course Generation
-- Uses GPT-4 to create industry-specific content
-- Combines theoretical concepts with practical applications
-- Adapts to user's skill level and learning preferences
-- Generates 4-week courses with daily 10-minute sessions
+### Course Generation (v0.3.0)
+- **Multi-Provider Support**: xAI Grok (preferred) or OpenAI GPT-4 (fallback)
+- **Industry-Specific Content**: Tailored to your industry and role
+- **Theory-First Approach**: Foundational concepts with practical applications
+- **4-Week Structure**: 28 daily sessions (10 minutes each)
+- **Session Types**: Theory, quiz, interactive, hands-on, and review content
+- **Automatic Validation**: Ensures proper course structure and content quality
+- **Error Recovery**: Automatic retry with stricter prompts for malformed responses
 
-### Emotion Detection
+### How to Use Course Generation
+1. **Navigate to `/generate`** from your dashboard
+2. **Fill out the form** with your course topic, industry, and preferences
+3. **Submit** to generate a personalized 4-week course
+4. **Review and edit** the draft course in the preview page
+5. **Publish** when ready to start learning
+
+### LLM Provider Selection
+- **OpenAI GPT-4**: Used when `OPENAI_API_KEY` is available (recommended)
+- **xAI Grok**: Used when `XAI_API_KEY` is available (fallback)
+- **No API Key**: Shows helpful configuration guidance
+
+### Emotion Detection (Planned)
 - Real-time emotion monitoring during sessions
 - Adaptation triggers for frustration/confusion
 - Learning pace adjustments based on engagement
 - Supportive interventions when needed
 
-### Chatbot Assistant
+### Chatbot Assistant (Planned)
 - Context-aware lesson delivery
 - Interactive tool recommendations
 - Natural language explanations
@@ -282,8 +318,8 @@ For questions or support:
 ## 🚦 Development Status
 
 - ✅ **MVP Foundation**: Core structure and onboarding complete
+- ✅ **Course Generation (v0.3.0)**: Complete course generation system with LLM integration
 - 🚧 **Database Setup**: Schema design in progress
-- ⏳ **Course Generation**: LLM integration upcoming
 - ⏳ **Learning Engine**: Session delivery system planned
 - ⏳ **Emotion AI**: Advanced features in development
 

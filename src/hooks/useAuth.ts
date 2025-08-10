@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { UserProfile } from '@/types'
@@ -20,55 +20,23 @@ export function useAuth() {
     error: null
   })
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        setState(prev => ({ ...prev, error: error.message, loading: false }))
-        return
-      }
-      
-      if (session?.user) {
-        loadUserProfile(session.user)
-      } else {
-        setState(prev => ({ ...prev, loading: false }))
-      }
-    })
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state change:', event, session?.user?.id)
-        if (session?.user) {
-          await loadUserProfile(session.user)
-        } else {
-          setState({
-            user: null,
-            profile: null,
-            loading: false,
-            error: null
-          })
-        }
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const loadUserProfile = async (user: User) => {
+  const loadUserProfile = useCallback(async (user: User) => {
     try {
       console.log('Loading profile for user:', user.id)
       
-      // Test basic Supabase connection first
-      console.log('Testing Supabase connection...')
-      const connectionTest = await supabase.from('user_profiles').select('count', { count: 'exact', head: true })
-      console.log('Connection test result:', connectionTest)
-      
-      const { data: profile, error } = await supabase
+      // Add timeout to prevent hanging
+      const profilePromise = supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', user.id)
         .single()
+
+      const { data: profile, error } = await Promise.race([
+        profilePromise,
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Profile loading timeout')), 10000)
+        )
+      ])
 
       console.log('Profile query result:', { profile, error, errorCode: error?.code, errorMessage: error?.message })
 
@@ -118,7 +86,71 @@ export function useAuth() {
         error: error instanceof Error ? error.message : 'Failed to load profile'
       }))
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+
+    const initializeAuth = async () => {
+      try {
+        // Get initial session with timeout
+        const sessionPromise = supabase.auth.getSession()
+        const { data: { session }, error } = await Promise.race([
+          sessionPromise,
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Session initialization timeout')), 10000)
+          )
+        ])
+
+        if (!mounted) return
+
+        if (error) {
+          setState(prev => ({ ...prev, error: error.message, loading: false }))
+          return
+        }
+        
+        if (session?.user) {
+          await loadUserProfile(session.user)
+        } else {
+          setState(prev => ({ ...prev, loading: false }))
+        }
+      } catch (error) {
+        if (!mounted) return
+        console.error('Auth initialization error:', error)
+        setState(prev => ({ 
+          ...prev, 
+          loading: false, 
+          error: error instanceof Error ? error.message : 'Authentication initialization failed' 
+        }))
+      }
+    }
+
+    initializeAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return
+        
+        console.log('Auth state change:', event, session?.user?.id)
+        if (session?.user) {
+          await loadUserProfile(session.user)
+        } else {
+          setState({
+            user: null,
+            profile: null,
+            loading: false,
+            error: null
+          })
+        }
+      }
+    )
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [loadUserProfile])
 
   const signUp = async (email: string, password: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }))
@@ -281,12 +313,39 @@ export function useAuth() {
     return { success: true, data }
   }
 
+  // Add a method to manually refresh the auth state
+  const refreshAuth = useCallback(async () => {
+    setState(prev => ({ ...prev, loading: true, error: null }))
+    
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        setState(prev => ({ ...prev, error: error.message, loading: false }))
+        return
+      }
+      
+      if (session?.user) {
+        await loadUserProfile(session.user)
+      } else {
+        setState(prev => ({ ...prev, loading: false }))
+      }
+    } catch (error) {
+      setState(prev => ({ 
+        ...prev, 
+        loading: false, 
+        error: error instanceof Error ? error.message : 'Failed to refresh authentication' 
+      }))
+    }
+  }, [loadUserProfile])
+
   return {
     ...state,
     signUp,
     signIn,
     signOut,
     createProfile,
-    updateProfile
+    updateProfile,
+    refreshAuth
   }
 }
