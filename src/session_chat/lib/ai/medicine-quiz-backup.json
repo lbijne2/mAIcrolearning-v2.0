@@ -1,0 +1,82 @@
+[
+    {
+          "id": "med1",
+          "question": "Which of these is NOT a component of a DNA nucleotide?",
+          "choices": ["Deoxyribose sugar", "Phosphate group", "Ribose sugar", "Nitrogenous base"],
+          "correctIndex": 2,
+          "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fe/DNA_simple2.svg/970px-DNA_simple2.svg.png",
+          "theory": "A DNA nucleotide consists of a deoxyribose sugar, a phosphate group, and a nitrogenous base (adenine, thymine, cytosine, or guanine). Ribose sugar is found in RNA nucleotides, not DNA."
+    },
+       
+    {
+      "id": "med2",
+      "question": "Which of these is NOT a type of white blood cell?",
+      "choices": ["Neutrophil", "Erythrocyte", "Lymphocyte", "Monocyte"],
+      "correctIndex": 1,
+      "theory": "White blood cells (leukocytes) are immune cells such as neutrophils, lymphocytes, and monocytes. Erythrocytes are red blood cells that carry oxygen and are not part of the immune system."
+    },
+    {
+      "id": "med3",
+      "question": "What is the main function of the spleen?",
+      "choices": ["To produce bile", "To filter blood", "To regulate body temperature", "To store urine"],
+      "correctIndex": 1,
+      "theory": "The spleen filters the blood, removes old or damaged red blood cells, and helps mount immune responses by housing lymphoid tissue that encounters antigens."
+    },
+    {
+      "id": "med4",
+      "question": "Which vitamin deficiency leads to scurvy?",
+      "choices": ["Vitamin A", "Vitamin B12", "Vitamin C", "Vitamin D"],
+      "correctIndex": 2,
+      "theory": "Vitamin C (ascorbic acid) is needed for collagen synthesis and antioxidant defense. Deficiency impairs connective tissue and causes scurvy with symptoms like gum bleeding and poor wound healing."
+    },
+    {
+      "id": "med4",
+      "question": "Which valve separates the left atrium and left ventricle?",
+      "choices": ["Tricuspid valve", "Pulmonary valve", "Mitral valve", "Aortic valve"],
+      "correctIndex": 2,
+      "theory": "The mitral (bicuspid) valve sits between the left atrium and left ventricle and has two leaflets. The tricuspid valve is between the right atrium and right ventricle."
+    },
+    {
+      "id": "med6",
+      "question": "Which microorganism causes tuberculosis?",
+      "choices": ["Staphylococcus aureus", "Mycobacterium tuberculosis", "Streptococcus pneumoniae", "Escherichia coli"],
+      "correctIndex": 1,
+      "theory": "Tuberculosis is caused by Mycobacterium tuberculosis, an acid-fast bacillus transmitted by respiratory droplets. It often involves the lungs and can form caseating granulomas."
+    },
+    {
+      "id": "med7",
+      "question": "What is the primary neurotransmitter at the neuromuscular junction?",
+      "choices": ["Dopamine", "Serotonin", "Acetylcholine", "GABA"],
+      "correctIndex": 2,
+      "theory": "At the neuromuscular junction, motor neurons release acetylcholine, which binds nicotinic receptors on skeletal muscle to trigger contraction."
+    },
+    {
+      "id": "med8",
+      "question": "Which hormone is produced by the adrenal medulla?",
+      "choices": ["Cortisol", "Aldosterone", "Epinephrine", "Thyroxine"],
+      "correctIndex": 2,
+      "theory": "The adrenal medulla secretes catecholamines (epinephrine and norepinephrine) in response to sympathetic stimulation. The adrenal cortex makes cortisol and aldosterone."
+    },
+    {
+      "id": "med9",
+      "question": "Which imaging modality uses ionizing radiation?",
+      "choices": ["MRI", "Ultrasound", "CT scan", "Echocardiography"],
+      "correctIndex": 2,
+      "theory": "CT scans use X‑rays (ionizing radiation) to produce cross‑sectional images. MRI uses magnetic fields and radio waves; ultrasound uses high‑frequency sound; echocardiography is a cardiac ultrasound."
+    },
+    {
+      "id": "med10",
+      "question": "Which lab finding is most consistent with iron‑deficiency anemia?",
+      "choices": ["High ferritin", "Low TIBC", "Low serum iron", "Macrocytosis"],
+      "correctIndex": 2,
+      "theory": "Iron‑deficiency anemia typically shows low serum iron, high TIBC, low ferritin, and microcytosis (small red cells)."
+    },
+    {
+      "id": "med11",
+      "question": "What is the first‑line treatment for anaphylaxis?",
+      "choices": ["Antihistamines", "Corticosteroids", "Albuterol", "Intramuscular epinephrine"],
+      "correctIndex": 3,
+      "theory": "Anaphylaxis is a life‑threatening allergic reaction that requires immediate intramuscular epinephrine to reverse airway edema, hypotension, and bronchospasm. Supportive measures follow."
+    }
+  ]
+  

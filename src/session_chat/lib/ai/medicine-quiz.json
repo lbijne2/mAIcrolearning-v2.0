@@ -1,0 +1,90 @@
+[
+    {
+      "id": "med1",
+      "question": "Which of the following best describes generative AI?",
+      "choices": [
+        "AI systems that can create new data resembling their training data",
+        "AI algorithms that only perform classification on existing data",
+        "Rule-based AI that strictly follows predefined instructions",
+        "A type of AI that cannot process image or text information"
+      ],
+      "correctIndex": 0,
+      "questionType": "multiple-choice",
+      "theory": "Generative AI refers to models that learn the underlying patterns of the training data and can generate new, similar data samples:contentReference. Unlike discriminative models that focus on classifying or predicting from existing data, generative models actually create content. For example, a generative model could produce realistic synthetic medical images that resemble real patient scans, providing additional data for training or diagnostic support."
+    },
+    {
+      "id": "med2",
+      "question": "Which two components form the core of a Generative Adversarial Network (GAN)?",
+      "choices": [
+        "Generator and Discriminator",
+        "Encoder and Decoder",
+        "Feature Extractor and Classifier",
+        "Sensor and Actuator"
+      ],
+      "correctIndex": 0,
+      "questionType": "multiple-choice",
+      "theory": "A GAN is composed of two neural networks: a generator that produces synthetic data (such as images) and a discriminator that attempts to distinguish generated data from real data:contentReference. During training, the generator tries to fool the discriminator with increasingly realistic outputs, while the discriminator learns to better detect fakes. This adversarial process forces the generator to improve until its outputs become difficult to tell apart from real examples, enabling very realistic image generation."
+    },
+    {
+      "id": "med3",
+      "question": "Imagine you are training a deep learning model to detect a rare condition on MRI scans, but you only have a handful of patient images of that condition. How could generative AI help in this scenario?",
+      "choices": [
+        "Create additional synthetic MRI scans to augment the dataset",
+        "Use only the existing images without modification",
+        "Ignore the rare condition and focus on common conditions",
+        "Reduce the model complexity to avoid overfitting"
+      ],
+      "correctIndex": 0,
+      "questionType": "case-based",
+      "theory": "In this case, generative AI could be used to create additional synthetic MRI scans of the rare condition to augment the dataset. By learning from the few available examples, a generative model (e.g. a GAN or similar) can produce new MRI images that exhibit similar characteristics to the real scans with that pathology:contentReference. These realistic synthetic images effectively increase the training data, helping the predictive model avoid overfitting and improve its ability to recognize the condition even with originally limited cases."
+    },
+    {
+      "id": "med4",
+      "question": "Generative AI techniques can produce a synthetic CT scan from an MRI scan of the same patient.",
+      "choices": [
+        "True",
+        "False"
+      ],
+      "correctIndex": 0,
+      "questionType": "true-false",
+      "theory": "True. Generative models can be trained to translate images from one modality to another. For instance, a GAN or similar network can take an MRI scan as input and generate a corresponding synthetic CT image that approximates what a real CT would look like:contentReference. This cross-modality generation is useful in practice (e.g., creating CT-like images from MRI for radiation therapy planning without needing an actual CT scan). More generally, generative AI can also enhance imaging data quality – for example, producing clearer, high-resolution images from low-quality or low-dose scans by reducing noise and artifacts:contentReference."
+    },
+    {
+      "id": "med5",
+      "question": "What does 'multimodal learning' refer to in the context of medical AI?",
+      "choices": [
+        "Combining multiple types of data (e.g. images, text, lab results) in one model",
+        "Using multiple imaging filters on the same image",
+        "Training multiple models and averaging their predictions",
+        "Applying multiple augmentations to the same dataset"
+      ],
+      "correctIndex": 0,
+      "questionType": "multiple-choice",
+      "theory": "In medical AI, multimodal learning means integrating different kinds of data within a single model (for example, combining radiology images with textual reports or patient demographics):contentReference. Such models can draw on complementary information — for instance, an algorithm might use both an X-ray image and the radiologist's notes together to improve diagnostic accuracy. Generative AI is also entering the multimodal realm: models now exist that can, say, generate medical images from text descriptions by coupling language and vision components:contentReference."
+    },
+    {
+      "id": "med6",
+      "question": "Using generative AI to create synthetic medical images can help protect patient privacy.",
+      "choices": [
+        "True",
+        "False"
+      ],
+      "correctIndex": 0,
+      "questionType": "true-false",
+      "theory": "True. Synthetic images generated by AI are not real patient scans, so they do not contain direct personal identifiers:contentReference. This means researchers and clinicians can use or share these realistic-but-fake images for developing AI models without risking patient confidentiality. In practice, this approach allows data augmentation and collaboration across institutions while minimizing privacy concerns, as long as the generative model is carefully validated to avoid leaking any real patient data."
+    },
+    {
+      "id": "med7",
+      "question": "Fill in the blank: Generative AI can create synthetic medical images for data ________, helping increase the amount and diversity of training data without needing more patient scans.",
+      "choices": [
+        "augmentation",
+        "reduction",
+        "compression",
+        "encryption"
+      ],
+      "correctIndex": 0,
+      "questionType": "fill-in-the-blank",
+      "theory": "The missing word is **augmentation**. Data augmentation refers to expanding a dataset with additional examples, often by transformations or synthetic generation. Generative models excel at this by producing new, realistic images that mimic the original data distribution:contentReference. In medical imaging, such augmented datasets (with many synthetic variations) can improve model training, especially when real images are limited or hard to collect."
+    }
+]
+  

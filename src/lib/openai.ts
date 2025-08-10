@@ -195,6 +195,8 @@ export class LessonChatbot {
     userMessage: string
     conversationHistory: any[]
     emotionData?: any
+    gradingPreamble?: string
+    firstTurnPreamble?: string
   }) {
     if (!openai) {
       throw new Error('OpenAI client not initialized. Please check your API key.')
@@ -212,10 +214,11 @@ Guidelines:
 - Ask interactive questions to maintain engagement
 - Offer practical examples and applications
 - Use simple language for complex concepts
-- Suggest tool calls when appropriate for hands-on learning`
+    - Suggest tool calls when appropriate for hands-on learning
+    - If you want to ask a multiple-choice question, return STRICT JSON with shape {"type":"quiz","id":"<string>","question":"<string>","choices":["A","B",...],"correctIndex":<number>,"questionType":"multiple-choice","explanation":"<string>"} and nothing else. Do not include markdown.`
 
     const messages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: systemPrompt + (params.gradingPreamble ?? '') + (params.firstTurnPreamble ?? '') },
       ...params.conversationHistory,
       { role: 'user', content: params.userMessage }
     ]
@@ -265,6 +268,48 @@ Give encouraging, specific feedback that helps the user learn.`
 
     return response.choices[0].message.content
   }
+}
+
+// Generate a quiz set of N multiple-choice questions
+export async function generateQuizSet(params: {
+  sessionContent: any
+  sessionTitle: string
+  sessionType: string
+  courseTitle: string
+  courseLearningObjectives: string[]
+  numQuestions: number
+}) {
+  if (!openai) throw new Error('OpenAI client not initialized.')
+  const system = `You are an expert quiz generator for micro-learning sessions. Output STRICT JSON only.`
+  const user = `Create a quiz of ${params.numQuestions} multiple-choice questions for a session titled "${params.sessionTitle}" in the course "${params.courseTitle}". Base questions ONLY on this content: ${JSON.stringify(params.sessionContent)}. Each question should be concise and unambiguous.
+
+Return a JSON array of objects with this exact shape per item:
+{
+  "type": "quiz",
+  "id": "q<number>",
+  "question": "<string>",
+  "choices": ["<string>", "<string>", "<string>", "<string>"],
+  "correctIndex": <0-3>,
+  "questionType": "multiple-choice",
+  "explanation": "<short explanation>"
+}
+
+No preface or markdown.`
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    temperature: 0.4,
+    max_tokens: 1200,
+  })
+
+  const content = response.choices[0].message.content || '[]'
+  const parsed = JSON.parse(content)
+  if (!Array.isArray(parsed)) throw new Error('Quiz set must be an array')
+  return parsed
 }
 
 // Helper function to check if OpenAI is available

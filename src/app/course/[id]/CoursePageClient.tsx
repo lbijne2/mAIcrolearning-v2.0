@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { CircularProgress } from '@/components/ui/Progress'
+import { CircularProgress, Progress } from '@/components/ui/Progress'
 import { supabase } from '@/lib/supabase'
 import { revertCourseToDraft } from '@/app/generate/actions'
 import { useAuth } from '@/hooks/useAuth'
@@ -39,6 +39,67 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
     loadCourse()
   }, [courseId])
 
+  // Realtime updates for this course's progress and status
+  useEffect(() => {
+    let isMounted = true
+    const channels: any[] = []
+    ;(async () => {
+      try {
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        if (!isMounted || !currentUser) return
+        const progressCh = supabase
+          .channel(`course_progress_${courseId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'user_progress', filter: `user_id=eq.${currentUser.id},course_id=eq.${courseId}` }, () => {
+            loadCourse()
+          })
+          .subscribe()
+        channels.push(progressCh)
+
+        const courseCh = supabase
+          .channel(`course_status_${courseId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'courses', filter: `id=eq.${courseId}` }, () => {
+            loadCourse()
+          })
+          .subscribe()
+        channels.push(courseCh)
+      } catch {}
+    })()
+    // Soft refresh when regaining focus/visibility
+    const onFocus = () => loadCourse()
+    const onVisibility = () => { if (document.visibilityState === 'visible') loadCourse() }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onFocus)
+      document.addEventListener('visibilitychange', onVisibility)
+    }
+    return () => {
+      isMounted = false
+      for (const ch of channels) {
+        try { supabase.removeChannel(ch) } catch {}
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onFocus)
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+    }
+  }, [courseId])
+
+  // BroadcastChannel listener for immediate progress updates from session pages
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return
+    const bc = new BroadcastChannel('progress_updates')
+    const handler = (ev: MessageEvent) => {
+      const msg = ev?.data
+      if (!msg) return
+      if (msg.courseId === courseId && (msg.type === 'session_completed' || msg.type === 'progress_updated')) {
+        loadCourse()
+      }
+    }
+    bc.addEventListener('message', handler)
+    return () => {
+      try { bc.removeEventListener('message', handler); bc.close() } catch {}
+    }
+  }, [courseId])
+
   const loadCourse = async () => {
     try {
       setLoading(true)
@@ -50,13 +111,13 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
         return
       }
 
-      // Load course (only active courses)
+      // Load course (active or completed)
       const { data: courseData, error: courseError } = await supabase
         .from('courses')
         .select('*')
         .eq('id', courseId)
         .eq('user_id', user.id)
-        .eq('status', 'active')
+        .in('status', ['active', 'completed'])
         .single()
 
       if (courseError || !courseData) {
@@ -147,6 +208,7 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
   }
 
   const nextSession = getNextLesson()
+  const courseCompleted = totalSessionsCount > 0 && completedSessionsCount >= totalSessionsCount
 
   if (loading) {
     return (
@@ -318,7 +380,13 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
               {/* Next Session */}
               <div className="border-l border-neutral-200 pl-6">
                 <h4 className="font-semibold text-neutral-900 mb-3">Next Session</h4>
-                {nextSession ? (
+                 {courseCompleted ? (
+                   <div className="text-center py-4">
+                     <div className="text-green-600 mb-2">🎉</div>
+                     <p className="text-sm text-neutral-600">All sessions completed!</p>
+                     <div className="text-sm text-neutral-500 mt-1">Course progress is 100%.</div>
+                   </div>
+                 ) : nextSession ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-neutral-600">
@@ -344,7 +412,7 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
                       <span className="text-xs text-neutral-500">
                         {nextSession.estimated_duration} min
                       </span>
-                      <Button size="sm">
+                      <Button size="sm" onClick={() => handleNavigation(`/course/${course.id}/session/${nextSession.id}`)}>
                         Start Session
                       </Button>
                     </div>
@@ -370,10 +438,13 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sessions.map((session) => {
+                {sessions.map((session) => {
                 const sessionProgress = userProgress.find(progress => progress.session_id === session.id)
                 const isCompleted = sessionProgress?.status === 'completed'
                 const isInProgress = sessionProgress?.status === 'in_progress'
+                    const timeSpent = sessionProgress?.time_spent ?? 0
+                    const estSec = Math.max(1, (session.estimated_duration || 10) * 60)
+                    const pct = isCompleted ? 100 : Math.min(100, Math.round((timeSpent / estSec) * 100))
                 
                 return (
                   <div key={session.id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col h-full ${
@@ -414,6 +485,10 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
                       <p className="text-sm text-neutral-600">
                         {session.description}
                       </p>
+                          <div className="mt-3">
+                            <Progress value={pct} max={100} />
+                            <div className="mt-1 text-xs text-neutral-500">{pct}%</div>
+                          </div>
                     </div>
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-100">
                       <span className="text-xs text-neutral-500">
@@ -423,6 +498,7 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
                         variant={isCompleted ? "outline" : "ghost"} 
                         size="sm"
                         disabled={isCompleted}
+                        onClick={() => handleNavigation(`/course/${courseId}/session/${session.id}`)}
                       >
                         {isCompleted ? 'Completed' : isInProgress ? 'Continue' : 'Start'}
                       </Button>

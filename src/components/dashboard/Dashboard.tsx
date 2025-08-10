@@ -58,7 +58,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
         .from('courses')
         .select('*')
         .eq('user_id', user.id)
-        .in('status', ['draft', 'active'])
+        .in('status', ['draft', 'active', 'completed'])
         .order('created_at', { ascending: false })
 
       if (error) {
@@ -126,7 +126,43 @@ export function Dashboard({ user, profile }: DashboardProps) {
 
   const draftCourses = courses.filter(course => course.status === 'draft')
   const activeCourses = courses.filter(course => course.status === 'active')
+  const completedCourses = courses.filter(course => course.status === 'completed')
   const latestDraft = draftCourses[0]
+
+  const activeCourseIds = activeCourses.map(c => c.id)
+  const activeSessions = sessions.filter(s => activeCourseIds.includes(s.course_id))
+  const totalCompletedAcrossActive = userProgress.filter(p => p.status === 'completed' && activeCourseIds.includes(p.course_id)).length
+  const overallProgressPct = activeSessions.length > 0
+    ? Math.round((totalCompletedAcrossActive / activeSessions.length) * 100)
+    : 0
+
+  // Realtime updates: listen to user_progress and courses updates for this user to refresh dashboard
+  useEffect(() => {
+    const channels: any[] = []
+    try {
+      const upCh = supabase
+        .channel('user_progress_updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_progress', filter: `user_id=eq.${user.id}` }, () => {
+          // Reload minimal state; simplest is full refresh of data
+          loadCourses()
+        })
+        .subscribe()
+      channels.push(upCh)
+
+      const courseCh = supabase
+        .channel('courses_updates')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'courses', filter: `user_id=eq.${user.id}` }, () => {
+          loadCourses()
+        })
+        .subscribe()
+      channels.push(courseCh)
+    } catch {}
+    return () => {
+      for (const ch of channels) {
+        try { supabase.removeChannel(ch) } catch {}
+      }
+    }
+  }, [user.id])
 
   // Function to find the next lesson for a course
   const getNextLesson = (courseId: string) => {
@@ -146,7 +182,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
   const handleStartNextLesson = (courseId: string) => {
     const nextSession = getNextLesson(courseId)
     if (nextSession) {
-      handleNavigation(`/course/${courseId}?session=${nextSession.id}`)
+      handleNavigation(`/course/${courseId}/session/${nextSession.id}`)
     } else {
       // If all sessions are completed, go to course overview
       handleNavigation(`/course/${courseId}`)
@@ -254,7 +290,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
                 <Target className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-neutral-900">0</p>
+                <p className="text-2xl font-bold text-neutral-900">{userProgress.filter(p => p.status === 'completed').length}</p>
                 <p className="text-sm text-neutral-600">Sessions Completed</p>
               </div>
             </CardContent>
@@ -278,7 +314,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
                 <TrendingUp className="h-6 w-6 text-secondary-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-neutral-900">0%</p>
+                <p className="text-2xl font-bold text-neutral-900">{overallProgressPct}%</p>
                 <p className="text-sm text-neutral-600">Overall Progress</p>
               </div>
             </CardContent>
@@ -367,6 +403,9 @@ export function Dashboard({ user, profile }: DashboardProps) {
                                 <span>Next: Week {nextSession.week_number} • Day {nextSession.day_number}</span>
                               )}
                             </div>
+                            <div className="mt-2">
+                              <Progress value={completedCount} max={totalSessions || 1} />
+                            </div>
                           </div>
                           <div className="flex flex-col space-y-2 ml-4">
                             {nextSession && (
@@ -409,6 +448,46 @@ export function Dashboard({ user, profile }: DashboardProps) {
                 )}
               </CardContent>
             </Card>
+
+            {/* Completed Courses */}
+            {completedCourses.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Completed Courses</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {completedCourses.map((course) => {
+                      const totalSessions = sessions.filter(s => s.course_id === course.id).length
+                      return (
+                        <div key={course.id} className="flex items-center justify-between p-4 border rounded-lg bg-green-50 border-green-200">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-neutral-900">{course.title}</h3>
+                            <p className="text-sm text-neutral-600 mb-2">{course.description}</p>
+                            <div className="flex items-center space-x-4 text-xs text-neutral-500">
+                              <span>Completed</span>
+                              <span>{totalSessions} sessions</span>
+                            </div>
+                            <div className="mt-2">
+                              <Progress value={100} max={100} />
+                            </div>
+                          </div>
+                          <div className="flex flex-col space-y-2 ml-4">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleNavigation(`/course/${course.id}`)}
+                            >
+                              View Course
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Learning Goals */}
             <Card>
