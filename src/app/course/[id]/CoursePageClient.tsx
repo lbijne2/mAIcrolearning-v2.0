@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { CircularProgress } from '@/components/ui/Progress'
 import { supabase } from '@/lib/supabase'
 import { revertCourseToDraft } from '@/app/generate/actions'
 import { useAuth } from '@/hooks/useAuth'
@@ -133,6 +134,19 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
   // Calculate completed sessions count
   const completedSessionsCount = userProgress.filter(progress => progress.status === 'completed').length
   const totalSessionsCount = sessions.length
+
+  // Function to find the next lesson for this course
+  const getNextLesson = () => {
+    // Find the first session that is not completed
+    const nextSession = sessions.find(session => {
+      const sessionProgress = userProgress.find(progress => progress.session_id === session.id)
+      return !sessionProgress || sessionProgress.status !== 'completed'
+    })
+    
+    return nextSession
+  }
+
+  const nextSession = getNextLesson()
 
   if (loading) {
     return (
@@ -281,14 +295,70 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
             <CardTitle>Your Progress</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8">
-              <div className="text-3xl font-bold text-primary-600 mb-2">
-                {totalSessionsCount > 0 ? Math.round((completedSessionsCount / totalSessionsCount) * 100) : 0}%
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Progress Overview */}
+              <div className="text-center py-6">
+                <div className="flex justify-center mb-4">
+                  <CircularProgress 
+                    value={completedSessionsCount}
+                    max={totalSessionsCount}
+                    size={120}
+                    strokeWidth={8}
+                    variant="default"
+                    showLabel={true}
+                    className="text-primary-600"
+                  />
+                </div>
+                <p className="text-neutral-600 mb-2">Complete</p>
+                <div className="text-sm text-neutral-500">
+                  {completedSessionsCount} of {totalSessionsCount} sessions completed
+                </div>
               </div>
-              <p className="text-neutral-600 mb-4">Complete</p>
-              <Button size="sm">
-                Start Learning
-              </Button>
+
+              {/* Next Session */}
+              <div className="border-l border-neutral-200 pl-6">
+                <h4 className="font-semibold text-neutral-900 mb-3">Next Session</h4>
+                {nextSession ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-600">
+                        Week {nextSession.week_number} • Day {nextSession.day_number}
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        nextSession.session_type === 'theory' ? 'bg-blue-100 text-blue-800' :
+                        nextSession.session_type === 'quiz' ? 'bg-purple-100 text-purple-800' :
+                        nextSession.session_type === 'interactive' ? 'bg-green-100 text-green-800' :
+                        nextSession.session_type === 'hands_on' ? 'bg-orange-100 text-orange-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {nextSession.session_type}
+                      </span>
+                    </div>
+                    <h5 className="font-medium text-neutral-900">
+                      {nextSession.title}
+                    </h5>
+                    <p className="text-sm text-neutral-600">
+                      {nextSession.description}
+                    </p>
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-xs text-neutral-500">
+                        {nextSession.estimated_duration} min
+                      </span>
+                      <Button size="sm">
+                        Start Session
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <div className="text-green-600 mb-2">🎉</div>
+                    <p className="text-sm text-neutral-600">All sessions completed!</p>
+                    <Button size="sm" variant="outline" className="mt-2">
+                      Review Course
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
