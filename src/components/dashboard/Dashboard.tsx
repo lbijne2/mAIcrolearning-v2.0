@@ -20,9 +20,11 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Progress, CircularProgress } from '@/components/ui/Progress'
+import { SimpleCourseGenerator } from './SimpleCourseGenerator'
+import { AccountManager } from './AccountManager'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
-import type { UserProfile, Course } from '@/types'
+import type { UserProfile, Course, UserProgress, Session } from '@/types'
 import type { CourseRow } from '@/types/models'
 
 interface DashboardProps {
@@ -31,8 +33,12 @@ interface DashboardProps {
 }
 
 export function Dashboard({ user, profile }: DashboardProps) {
-  const [showCourseModal, setShowCourseModal] = useState(false)
+  const [showSimpleCourseModal, setShowSimpleCourseModal] = useState(false)
+  const [showAccountManager, setShowAccountManager] = useState(false)
+  const [currentProfile, setCurrentProfile] = useState<UserProfile>(profile)
   const [courses, setCourses] = useState<Course[]>([])
+  const [userProgress, setUserProgress] = useState<UserProgress[]>([])
+  const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -60,6 +66,36 @@ export function Dashboard({ user, profile }: DashboardProps) {
         setError('Failed to load courses. Please try again.')
       } else {
         setCourses(coursesData || [])
+        
+        // Load user progress for all courses
+        if (coursesData && coursesData.length > 0) {
+          const courseIds = coursesData.map(course => course.id)
+          
+          const { data: progressData, error: progressError } = await supabase
+            .from('user_progress')
+            .select('*')
+            .eq('user_id', user.id)
+            .in('course_id', courseIds)
+
+          if (progressError) {
+            console.error('Error loading user progress:', progressError)
+          } else {
+            setUserProgress(progressData || [])
+          }
+
+          // Load sessions for all courses
+          const { data: sessionsData, error: sessionsError } = await supabase
+            .from('sessions')
+            .select('*')
+            .in('course_id', courseIds)
+            .order('order_index')
+
+          if (sessionsError) {
+            console.error('Error loading sessions:', sessionsError)
+          } else {
+            setSessions(sessionsData || [])
+          }
+        }
       }
     } catch (err) {
       console.error('Error loading courses:', err)
@@ -92,6 +128,31 @@ export function Dashboard({ user, profile }: DashboardProps) {
   const activeCourses = courses.filter(course => course.status === 'active')
   const latestDraft = draftCourses[0]
 
+  // Function to find the next lesson for a course
+  const getNextLesson = (courseId: string) => {
+    const courseSessions = sessions.filter(session => session.course_id === courseId)
+    const courseProgress = userProgress.filter(progress => progress.course_id === courseId)
+    
+    // Find the first session that is not completed
+    const nextSession = courseSessions.find(session => {
+      const sessionProgress = courseProgress.find(progress => progress.session_id === session.id)
+      return !sessionProgress || sessionProgress.status !== 'completed'
+    })
+    
+    return nextSession
+  }
+
+  // Function to handle starting the next lesson
+  const handleStartNextLesson = (courseId: string) => {
+    const nextSession = getNextLesson(courseId)
+    if (nextSession) {
+      handleNavigation(`/course/${courseId}?session=${nextSession.id}`)
+    } else {
+      // If all sessions are completed, go to course overview
+      handleNavigation(`/course/${courseId}`)
+    }
+  }
+
   const handleSignOut = async () => {
     try {
       const result = await signOut()
@@ -104,6 +165,10 @@ export function Dashboard({ user, profile }: DashboardProps) {
       // Even if there's an error, try to redirect to home
       router.push('/')
     }
+  }
+
+  const handleProfileUpdate = (updatedProfile: UserProfile) => {
+    setCurrentProfile(updatedProfile)
   }
 
   return (
@@ -120,19 +185,10 @@ export function Dashboard({ user, profile }: DashboardProps) {
             </div>
             
             <div className="flex items-center space-x-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleRefresh}
-                loading={isRefreshing}
-                icon={<RefreshCw />}
-              >
-                Refresh
-              </Button>
               <Button variant="ghost" size="sm" icon={<Bell />}>
                 Notifications
               </Button>
-              <Button variant="ghost" size="sm" icon={<Settings />}>
+              <Button variant="ghost" size="sm" onClick={() => setShowAccountManager(true)} icon={<Settings />}>
                 Settings
               </Button>
               <Button variant="ghost" size="sm" onClick={handleSignOut} icon={<LogOut />}>
@@ -171,7 +227,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold text-neutral-900 mb-2">
-            Welcome back, {profile.first_name}!
+            Welcome back, {currentProfile.first_name}!
           </h1>
           <p className="text-neutral-600">
             Ready to continue your AI learning journey? You're doing great!
@@ -265,15 +321,25 @@ export function Dashboard({ user, profile }: DashboardProps) {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Your Learning Path</CardTitle>
-                  {activeCourses.length > 0 && (
+                  <div className="flex items-center space-x-2">
                     <Button 
-                      size="sm"
-                      onClick={() => handleNavigation('/generate')}
-                      icon={<Plus />}
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleRefresh}
+                      loading={isRefreshing}
+                      icon={<RefreshCw />}
                     >
-                      Generate New Course
                     </Button>
-                  )}
+                    {activeCourses.length > 0 && (
+                      <Button 
+                        size="sm"
+                        onClick={() => setShowSimpleCourseModal(true)}
+                        icon={<Plus />}
+                      >
+                        Generate New Course
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -284,21 +350,44 @@ export function Dashboard({ user, profile }: DashboardProps) {
                   </div>
                 ) : activeCourses.length > 0 ? (
                   <div className="space-y-4">
-                    {activeCourses.map((course) => (
-                      <div key={course.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h3 className="font-semibold text-neutral-900">{course.title}</h3>
-                          <p className="text-sm text-neutral-600">{course.description}</p>
+                    {activeCourses.map((course) => {
+                      const nextSession = getNextLesson(course.id)
+                      const courseProgress = userProgress.filter(progress => progress.course_id === course.id)
+                      const completedCount = courseProgress.filter(progress => progress.status === 'completed').length
+                      const totalSessions = sessions.filter(session => session.course_id === course.id).length
+                      
+                      return (
+                        <div key={course.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-neutral-900">{course.title}</h3>
+                            <p className="text-sm text-neutral-600 mb-2">{course.description}</p>
+                            <div className="flex items-center space-x-4 text-xs text-neutral-500">
+                              <span>{completedCount} / {totalSessions} sessions completed</span>
+                              {nextSession && (
+                                <span>Next: Week {nextSession.week_number} • Day {nextSession.day_number}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-col space-y-2 ml-4">
+                            {nextSession && (
+                              <Button 
+                                size="sm"
+                                onClick={() => handleStartNextLesson(course.id)}
+                              >
+                                Start Next Lesson
+                              </Button>
+                            )}
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleNavigation(`/course/${course.id}`)}
+                            >
+                              View Course
+                            </Button>
+                          </div>
                         </div>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleNavigation(`/course/${course.id}`)}
-                        >
-                          View Course
-                        </Button>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-12">
@@ -308,10 +397,10 @@ export function Dashboard({ user, profile }: DashboardProps) {
                     </h3>
                     <p className="text-neutral-600 mb-6 max-w-md mx-auto">
                       Let's create your first personalized AI course based on your profile. 
-                      It will be tailored specifically for the {profile.industry} industry.
+                      It will be tailored specifically for the {currentProfile.industry} industry.
                     </p>
                     <Button 
-                      onClick={() => handleNavigation('/generate')}
+                      onClick={() => setShowSimpleCourseModal(true)}
                       icon={<Plus />}
                     >
                       Generate My First Course
@@ -328,7 +417,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {profile.learning_goals.map((goal, index) => (
+                  {currentProfile.learning_goals.map((goal, index) => (
                     <span
                       key={index}
                       className="px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm"
@@ -351,19 +440,19 @@ export function Dashboard({ user, profile }: DashboardProps) {
               <CardContent className="space-y-4">
                 <div>
                   <span className="text-sm font-medium text-neutral-700">Industry:</span>
-                  <p className="text-neutral-900">{profile.industry}</p>
+                  <p className="text-neutral-900">{currentProfile.industry}</p>
                 </div>
                 <div>
                   <span className="text-sm font-medium text-neutral-700">Role:</span>
-                  <p className="text-neutral-900">{profile.job_role}</p>
+                  <p className="text-neutral-900">{currentProfile.job_role}</p>
                 </div>
                 <div>
                   <span className="text-sm font-medium text-neutral-700">AI Experience:</span>
-                  <p className="text-neutral-900 capitalize">{profile.ai_skill_level}</p>
+                  <p className="text-neutral-900 capitalize">{currentProfile.ai_skill_level}</p>
                 </div>
                 <div>
                   <span className="text-sm font-medium text-neutral-700">Daily Goal:</span>
-                  <p className="text-neutral-900">{profile.time_commitment} minutes</p>
+                  <p className="text-neutral-900">{currentProfile.time_commitment} minutes</p>
                 </div>
               </CardContent>
             </Card>
@@ -376,7 +465,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
               <CardContent className="text-center">
                 <CircularProgress value={0} size={100} className="mb-4" />
                 <p className="text-sm text-neutral-600">
-                  0 / {profile.time_commitment} minutes completed
+                  0 / {currentProfile.time_commitment} minutes completed
                 </p>
                 <Button variant="outline" size="sm" className="mt-4 w-full">
                   Start Today's Session
@@ -391,7 +480,7 @@ export function Dashboard({ user, profile }: DashboardProps) {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {profile.interests.map((interest, index) => (
+                  {currentProfile.interests.map((interest, index) => (
                     <span
                       key={index}
                       className="px-2 py-1 bg-secondary-100 text-secondary-800 rounded text-xs"
@@ -406,37 +495,20 @@ export function Dashboard({ user, profile }: DashboardProps) {
         </div>
       </div>
 
-      {/* Course Generation Modal - Redirect to Generate Page */}
-      {showCourseModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle>Generate Your Course</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center py-8">
-              <Brain className="h-12 w-12 text-primary-600 mx-auto mb-4" />
-              <p className="text-neutral-600 mb-6">
-                Let's create a personalized 4-week AI course for the {profile.industry} industry.
-              </p>
-              <div className="space-y-3">
-                <Button 
-                  onClick={() => handleNavigation('/generate')}
-                  className="w-full"
-                >
-                  Go to Course Generator
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowCourseModal(false)}
-                  className="w-full"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Simple Course Generation Modal */}
+      <SimpleCourseGenerator
+        isOpen={showSimpleCourseModal}
+        onClose={() => setShowSimpleCourseModal(false)}
+        profile={currentProfile}
+      />
+
+      {/* Account Manager Modal */}
+      <AccountManager
+        isOpen={showAccountManager}
+        onClose={() => setShowAccountManager(false)}
+        profile={currentProfile}
+        onProfileUpdate={handleProfileUpdate}
+      />
     </div>
   )
 }

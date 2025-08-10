@@ -59,6 +59,10 @@
 @layer utilities {
   .text-gradient {
     @apply bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    padding-bottom: 0.1em;
   }
   
   .bg-gradient-primary {

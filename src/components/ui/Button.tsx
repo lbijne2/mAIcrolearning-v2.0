@@ -7,7 +7,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md' | 'lg'
   loading?: boolean
   icon?: React.ReactNode
-  children: React.ReactNode
+  children?: React.ReactNode
 }
 
 export function Button({
@@ -48,11 +48,11 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <Loader2 className={children && children !== '\u00A0' ? "mr-2 h-4 w-4 animate-spin" : "h-4 w-4 animate-spin"} />
       ) : icon ? (
-        <span className="mr-2">{icon}</span>
+        <span className={children && children !== '\u00A0' ? "mr-2" : ""}>{icon}</span>
       ) : null}
-      {children}
+      {children || null}
     </button>
   )
 }

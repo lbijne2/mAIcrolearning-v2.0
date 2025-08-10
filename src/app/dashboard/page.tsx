@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Dashboard } from '@/components/dashboard/Dashboard'
-import { Loader2, AlertCircle, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { ConnectionError } from '@/components/ui/ConnectionError'
 
 export default function DashboardPage() {
-  const { user, profile, loading, error } = useAuth()
+  const { user, profile, loading, error, refreshAuth, clearError } = useAuth()
   const router = useRouter()
   const [retryCount, setRetryCount] = useState(0)
   const [isRetrying, setIsRetrying] = useState(false)
@@ -35,15 +36,22 @@ export default function DashboardPage() {
           window.location.reload()
         }, 1000)
       }
-    }, 10000) // 10 second timeout
+    }, 15000) // Increased to 15 seconds to match useAuth timeout
 
     return () => clearTimeout(timeout)
   }, [loading, retryCount])
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
     setIsRetrying(true)
     setRetryCount(prev => prev + 1)
-    window.location.reload()
+    clearError()
+    await refreshAuth()
+    setIsRetrying(false)
+  }
+
+  const handleClearError = () => {
+    clearError()
+    setRetryCount(0)
   }
 
   if (loading) {
@@ -74,16 +82,19 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
-          <p className="text-neutral-600 mb-4">Error loading dashboard</p>
-          <p className="text-sm text-red-600 mb-4">{error}</p>
-          <div className="space-x-4">
-            <Button onClick={handleRetry} icon={<RefreshCw />}>
-              Retry
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/')}>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <ConnectionError
+            error={error}
+            onRetry={handleRetry}
+            onClearError={handleClearError}
+          />
+          <div className="mt-4 text-center">
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/')}
+              className="w-full"
+            >
               Go to Home
             </Button>
           </div>

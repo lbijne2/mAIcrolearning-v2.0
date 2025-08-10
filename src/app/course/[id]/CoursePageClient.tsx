@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { supabase } from '@/lib/supabase'
 import { revertCourseToDraft } from '@/app/generate/actions'
 import { useAuth } from '@/hooks/useAuth'
-import type { Course, Session } from '@/types'
+import type { Course, Session, UserProgress } from '@/types'
 
 interface CoursePageClientProps {
   courseId: string
@@ -27,6 +27,7 @@ interface CoursePageClientProps {
 export function CoursePageClient({ courseId }: CoursePageClientProps) {
   const [course, setCourse] = useState<Course | null>(null)
   const [sessions, setSessions] = useState<Session[]>([])
+  const [userProgress, setUserProgress] = useState<UserProgress[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [revertingToDraft, setRevertingToDraft] = useState(false)
@@ -77,6 +78,21 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
       }
 
       setSessions(sessionsData || [])
+
+      // Load user progress for this course
+      const { data: progressData, error: progressError } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('course_id', courseId)
+        .eq('user_id', user.id)
+
+      if (progressError) {
+        console.error('Failed to load user progress:', progressError)
+        // Don't fail the entire load for progress errors
+        setUserProgress([])
+      } else {
+        setUserProgress(progressData || [])
+      }
     } catch (err) {
       setError('An unexpected error occurred.')
     } finally {
@@ -114,6 +130,10 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
     }
   }
 
+  // Calculate completed sessions count
+  const completedSessionsCount = userProgress.filter(progress => progress.status === 'completed').length
+  const totalSessionsCount = sessions.length
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -145,24 +165,22 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
       <header className="bg-white border-b border-neutral-200">
         <div className="max-w-7xl mx-auto container-padding py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-                        <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => handleNavigation('/dashboard')}
-            icon={<ArrowLeft />}
-          >
-            Back to Dashboard
-          </Button>
-              <div className="flex items-center space-x-2">
-                <Brain className="h-6 w-6 text-primary-600" />
-                <span className="text-lg font-semibold text-neutral-900">
-                  Course Overview
-                </span>
-              </div>
+            <div className="flex items-center space-x-2">
+              <Brain className="h-6 w-6 text-primary-600" />
+              <span className="text-lg font-semibold text-neutral-900">
+                Course Overview
+              </span>
             </div>
             
             <div className="flex items-center space-x-3">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => handleNavigation('/dashboard')}
+                icon={<ArrowLeft />}
+              >
+                Back to Dashboard
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -222,7 +240,7 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
                 <Calendar className="h-4 w-4 text-neutral-600" />
                 <div>
                   <div className="text-sm text-neutral-600">Sessions</div>
-                  <div className="font-medium">{sessions.length} / 28</div>
+                  <div className="font-medium">{completedSessionsCount} / {totalSessionsCount}</div>
                 </div>
               </div>
             </div>
@@ -264,7 +282,9 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
           </CardHeader>
           <CardContent>
             <div className="text-center py-8">
-              <div className="text-3xl font-bold text-primary-600 mb-2">0%</div>
+              <div className="text-3xl font-bold text-primary-600 mb-2">
+                {totalSessionsCount > 0 ? Math.round((completedSessionsCount / totalSessionsCount) * 100) : 0}%
+              </div>
               <p className="text-neutral-600 mb-4">Complete</p>
               <Button size="sm">
                 Start Learning
@@ -280,38 +300,66 @@ export function CoursePageClient({ courseId }: CoursePageClientProps) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sessions.map((session) => (
-                <div key={session.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-neutral-600">
-                      Week {session.week_number} • Day {session.day_number}
-                    </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      session.session_type === 'theory' ? 'bg-blue-100 text-blue-800' :
-                      session.session_type === 'quiz' ? 'bg-purple-100 text-purple-800' :
-                      session.session_type === 'interactive' ? 'bg-green-100 text-green-800' :
-                      session.session_type === 'hands_on' ? 'bg-orange-100 text-orange-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {session.session_type}
-                    </span>
+              {sessions.map((session) => {
+                const sessionProgress = userProgress.find(progress => progress.session_id === session.id)
+                const isCompleted = sessionProgress?.status === 'completed'
+                const isInProgress = sessionProgress?.status === 'in_progress'
+                
+                return (
+                  <div key={session.id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col h-full ${
+                    isCompleted ? 'border-green-200 bg-green-50' : 
+                    isInProgress ? 'border-blue-200 bg-blue-50' : 
+                    'border-neutral-200'
+                  }`}>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-neutral-600">
+                          Week {session.week_number} • Day {session.day_number}
+                        </span>
+                        <div className="flex items-center space-x-2">
+                          {isCompleted && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              ✓ Completed
+                            </span>
+                          )}
+                          {isInProgress && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              In Progress
+                            </span>
+                          )}
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            session.session_type === 'theory' ? 'bg-blue-100 text-blue-800' :
+                            session.session_type === 'quiz' ? 'bg-purple-100 text-purple-800' :
+                            session.session_type === 'interactive' ? 'bg-green-100 text-green-800' :
+                            session.session_type === 'hands_on' ? 'bg-orange-100 text-orange-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {session.session_type}
+                          </span>
+                        </div>
+                      </div>
+                      <h3 className="font-semibold text-neutral-900 mb-1">
+                        {session.title}
+                      </h3>
+                      <p className="text-sm text-neutral-600">
+                        {session.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-100">
+                      <span className="text-xs text-neutral-500">
+                        {session.estimated_duration} min
+                      </span>
+                      <Button 
+                        variant={isCompleted ? "outline" : "ghost"} 
+                        size="sm"
+                        disabled={isCompleted}
+                      >
+                        {isCompleted ? 'Completed' : isInProgress ? 'Continue' : 'Start'}
+                      </Button>
+                    </div>
                   </div>
-                  <h3 className="font-semibold text-neutral-900 mb-1">
-                    {session.title}
-                  </h3>
-                  <p className="text-sm text-neutral-600 mb-2">
-                    {session.description}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-neutral-500">
-                      {session.estimated_duration} min
-                    </span>
-                    <Button variant="ghost" size="sm">
-                      Start
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </CardContent>
         </Card>

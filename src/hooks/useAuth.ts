@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { UserProfile } from '@/types'
+import { testSupabaseConnection, getConnectionStatus } from '@/utils/connectionTest'
 
 export interface AuthState {
   user: User | null
@@ -20,11 +21,35 @@ export function useAuth() {
     error: null
   })
 
-  const loadUserProfile = useCallback(async (user: User) => {
+  const loadUserProfile = useCallback(async (user: User, retryCount = 0) => {
+    const maxRetries = 2
+    
     try {
-      console.log('Loading profile for user:', user.id)
+      console.log(`Loading profile for user: ${user.id} (attempt ${retryCount + 1}/${maxRetries + 1})`)
+      console.log('Current timestamp:', new Date().toISOString())
       
-      // Add timeout to prevent hanging
+      // First, let's check if we can connect to Supabase at all
+      let connectionTest = false
+      try {
+        console.log('Testing Supabase connection...')
+        console.log('Environment status:', getConnectionStatus())
+        
+        const connectionResult = await testSupabaseConnection()
+        if (connectionResult.success) {
+          connectionTest = true
+          console.log(`✅ Supabase connection test successful (${connectionResult.responseTime}ms)`)
+        } else {
+          console.warn('⚠️ Supabase connection test failed:', connectionResult.error)
+          console.warn('Connection details:', connectionResult.details)
+        }
+      } catch (connectionError) {
+        console.warn('⚠️ Supabase connection test failed:', connectionError)
+        // Continue anyway, the actual query might still work
+      }
+      
+      // Add timeout to prevent hanging - increased to 15 seconds
+      console.log('Starting profile query...')
+      const startTime = Date.now()
       const profilePromise = supabase
         .from('user_profiles')
         .select('*')
@@ -34,9 +59,12 @@ export function useAuth() {
       const { data: profile, error } = await Promise.race([
         profilePromise,
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Profile loading timeout')), 10000)
+          setTimeout(() => reject(new Error('Profile loading timeout')), 15000)
         )
       ])
+      
+      const queryTime = Date.now() - startTime
+      console.log(`Profile query completed in ${queryTime}ms`)
 
       console.log('Profile query result:', { profile, error, errorCode: error?.code, errorMessage: error?.message })
 
@@ -63,6 +91,19 @@ export function useAuth() {
           return
         }
         
+        // Handle network/connection errors
+        if (error.code === 'PGRST301' || error.message?.includes('fetch')) {
+          console.error('🌐 NETWORK ERROR: Unable to connect to database')
+          setState(prev => ({
+            ...prev,
+            user,
+            profile: null,
+            loading: false,
+            error: 'Network connection issue. Please check your internet connection and try again.'
+          }))
+          return
+        }
+        
         throw error
       }
 
@@ -74,10 +115,31 @@ export function useAuth() {
         error: null
       })
     } catch (error) {
-      console.error('Failed to load profile (catch block):', error)
+      console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error)
       console.error('Error type:', typeof error)
       console.error('Error constructor:', error?.constructor?.name)
       console.error('Error stringified:', JSON.stringify(error, null, 2))
+      
+      // Handle timeout errors specifically
+      if (error instanceof Error && error.message.includes('timeout')) {
+        if (retryCount < maxRetries) {
+          console.log(`Retrying profile load in 2 seconds... (${retryCount + 1}/${maxRetries})`)
+          setTimeout(() => {
+            loadUserProfile(user, retryCount + 1)
+          }, 2000)
+          return
+        } else {
+          console.error('Max retries reached for profile loading')
+          setState(prev => ({
+            ...prev,
+            user,
+            profile: null,
+            loading: false,
+            error: 'Profile loading timed out after multiple attempts. Please check your connection and try again.'
+          }))
+          return
+        }
+      }
       
       setState(prev => ({
         ...prev,
@@ -98,29 +160,42 @@ export function useAuth() {
         const { data: { session }, error } = await Promise.race([
           sessionPromise,
           new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error('Session initialization timeout')), 10000)
+            setTimeout(() => reject(new Error('Session initialization timeout')), 15000)
           )
         ])
 
         if (!mounted) return
 
         if (error) {
+          console.error('Session initialization error:', error)
           setState(prev => ({ ...prev, error: error.message, loading: false }))
           return
         }
         
         if (session?.user) {
+          console.log('Session found, loading user profile...')
           await loadUserProfile(session.user)
         } else {
+          console.log('No active session found')
           setState(prev => ({ ...prev, loading: false }))
         }
       } catch (error) {
         if (!mounted) return
         console.error('Auth initialization error:', error)
+        
+        let errorMessage = 'Authentication initialization failed'
+        if (error instanceof Error) {
+          if (error.message.includes('timeout')) {
+            errorMessage = 'Authentication service is taking too long to respond. Please check your connection and try again.'
+          } else {
+            errorMessage = error.message
+          }
+        }
+        
         setState(prev => ({ 
           ...prev, 
           loading: false, 
-          error: error instanceof Error ? error.message : 'Authentication initialization failed' 
+          error: errorMessage
         }))
       }
     }
@@ -318,26 +393,49 @@ export function useAuth() {
     setState(prev => ({ ...prev, loading: true, error: null }))
     
     try {
-      const { data: { session }, error } = await supabase.auth.getSession()
+      const { data: { session }, error } = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Session refresh timeout')), 15000)
+        )
+      ])
       
       if (error) {
+        console.error('Session refresh error:', error)
         setState(prev => ({ ...prev, error: error.message, loading: false }))
         return
       }
       
       if (session?.user) {
+        console.log('Session refreshed, loading user profile...')
         await loadUserProfile(session.user)
       } else {
+        console.log('No active session found during refresh')
         setState(prev => ({ ...prev, loading: false }))
       }
     } catch (error) {
+      console.error('Auth refresh error:', error)
+      let errorMessage = 'Failed to refresh authentication'
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          errorMessage = 'Authentication refresh timed out. Please check your connection and try again.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       setState(prev => ({ 
         ...prev, 
         loading: false, 
-        error: error instanceof Error ? error.message : 'Failed to refresh authentication' 
+        error: errorMessage
       }))
     }
   }, [loadUserProfile])
+
+  // Add a method to clear error state
+  const clearError = useCallback(() => {
+    setState(prev => ({ ...prev, error: null }))
+  }, [])
 
   return {
     ...state,
@@ -346,6 +444,7 @@ export function useAuth() {
     signOut,
     createProfile,
     updateProfile,
-    refreshAuth
+    refreshAuth,
+    clearError
   }
 }

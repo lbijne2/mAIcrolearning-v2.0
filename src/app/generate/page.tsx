@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Brain, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Brain, AlertCircle, CheckCircle, Loader2, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -193,16 +193,28 @@ export default function GeneratePage() {
     <div className="min-h-screen bg-neutral-50">
       <div className="max-w-4xl mx-auto container-padding py-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center mb-4">
-            <Brain className="h-12 w-12 text-primary-600" />
+        <div className="mb-8">
+          <div className="text-center mb-6">
+            <div className="flex items-center justify-center mb-4">
+              <Brain className="h-12 w-12 text-primary-600" />
+            </div>
+            <h1 className="text-4xl font-display font-bold text-neutral-900 mb-4">
+              Generate a Course
+            </h1>
+            <p className="text-lg text-neutral-600 max-w-2xl mx-auto">
+              Create a personalized 4-week AI course tailored to your industry, experience level, and learning goals.
+            </p>
           </div>
-          <h1 className="text-4xl font-display font-bold text-neutral-900 mb-4">
-            Generate a Course
-          </h1>
-          <p className="text-lg text-neutral-600 max-w-2xl mx-auto">
-            Create a personalized 4-week AI course tailored to your industry, experience level, and learning goals.
-          </p>
+          
+          {/* Back to Dashboard Button */}
+          <Button
+            variant="ghost"
+            onClick={() => router.push('/dashboard')}
+            icon={<ArrowLeft />}
+            className="text-neutral-600 hover:text-neutral-900"
+          >
+            Back to Dashboard
+          </Button>
         </div>
 
         {/* Generation Progress */}

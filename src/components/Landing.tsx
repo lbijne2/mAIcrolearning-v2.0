@@ -237,7 +237,7 @@ export function Landing() {
               <div className="bg-accent-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-6">
                 <span className="text-2xl font-bold text-accent-600">2</span>
               </div>
-              <h3 className="text-xl font-semibold mb-4">Get Your Course</h3>
+              <h3 className="text-xl font-semibold mb-4">Generate Your Course</h3>
               <p className="text-neutral-600">
                 AI generates a custom 4-week course combining theory with 
                 practical applications for your specific industry.
@@ -376,7 +376,7 @@ export function Landing() {
             </div>
             
             <div className="text-sm">
-              © 2024 mAIcrolearning. All rights reserved.
+              © 2025 mAIcrolearning. All rights reserved.
             </div>
           </div>
         </div>
